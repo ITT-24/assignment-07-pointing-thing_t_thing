@@ -3,6 +3,7 @@ from pyglet.gl import glClearColor
 import argparse
 import pandas as pd
 import numpy as np
+import time
 
 """
 - display fitt's law study setup 
@@ -31,6 +32,7 @@ NUM_OF_CIRCLES = 7
 REPETITIONS = 3
 
 LOGS_FOLDER = "logs"
+HEADER = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy"]
 
 # ----- Parameterization ----- #
 
@@ -88,18 +90,11 @@ class Config:
 class Experiment():
     def __init__(self, config) -> None:
         c = config
-        self.movement_time = None # MT (sec)
-        self.index_of_diff = None # ID (bits) = log_2(2D/W)
         self.d = c.target_distances # distance between targets 
         self.r = c.target_radii     # width/radius of the target
         self.id = c.participant_id 
         self.num_trials = c.num_trials 
         self.current_trial = 0
-        self.results = None
-
-
-    # draw first batch of target + mark first
-    # if clicked correctly mark next until repetitions completed
 
     def start_experiment(self):
         self.start_trial(self.current_trial)
@@ -110,7 +105,8 @@ class Experiment():
         ts.mark_targets()
 
     def next_round(self):
-        self.process_round()
+        print("data", ts.data)
+        self.save_round()
 
         ts.clear_targets()
 
@@ -123,38 +119,15 @@ class Experiment():
             # ts.targets.append(l)
             # l.draw()
             print("done :D")
-            # self.save_results()
-
-    def process_round(self):
-        print("process results of current trial")
-        # save round data as csv with df
-        # save after every round + append data to self.results
-        pass
 
     def save_round(self):
         print("saveing the current round")
-        filename = f"{LOGS_FOLDER}/{self.id}-{self.current_trial}"
-
-        
-    def save_results(self):
-        print("save all roundas as 1 csv")
-        filename = f"{LOGS_FOLDER}/{self.id}-full"
-        pass
-
-    def calc_movement_time(self):
-        """MT = a + b * ID"""
-        pass
-
-    def calc_diff_index(self):
-        """ID = log_2(D/W + 1): D=mean dist, W=standard defiation of hit points"""
-        pass
-
-    def calc_throughput(self):
-        """TP = (ID/MT)"""
-        pass
+        filename = f"{LOGS_FOLDER}/{self.id}-{self.current_trial}.csv"
+        df = pd.DataFrame(ts.data, columns=HEADER)
+        df.to_csv(filename, encoding="utf-8")
 
 class Targets():
-    """Draws targets w different radii around the window center"""
+    """Draws and processes targets with different radii around the window center"""
     def __init__(self):
         self.batch = pyglet.graphics.Batch()
         self.targets = []
@@ -164,9 +137,14 @@ class Targets():
         self.previous_index = 0
         self.first = True
         self.hit_counter = 0
+        self.error_counter = 0
+        self.start = 0
+        self.end = 0
+        self.data = []
 
     def create_targets(self, radius, distance):
         # TODO: only create circles, that are within bounds
+        self.data = [] # reset for every round  
         self.current_radius = radius
         for i in range(0, NUM_OF_CIRCLES):
             self.add_circle(i, radius, distance)
@@ -184,7 +162,7 @@ class Targets():
         self.marked = None
     
     def mark_targets(self):
-        # return to original state
+        """Mark targets to click with red. The next target is opposite of the previous"""
         for t in self.targets:
             t.color = COLOR
 
@@ -194,7 +172,6 @@ class Targets():
         if self.first:
             self.marked = self.targets[self.previous_index]
             self.first = False
-            # print("[1st] ==", self.previous_index)
         else: # mark opposite
             offset = int(np.ceil(len(self.targets) / 2))
             idx = self.previous_index + offset
@@ -203,13 +180,10 @@ class Targets():
                 self.previous_index = 0
                 idx = self.previous_index
             else:
-                # print("[2nd] ==", idx, "->", self.previous_index, "+", offset)
                 self.previous_index += 1 
                 self.first = True
             self.marked = self.targets[idx]
         self.marked.color = MARKED
-
-        pass
     """ 
        0 1        0 2
      6     2    5     4
@@ -220,12 +194,22 @@ class Targets():
         if len(ts.targets) <= 1:
             return
         
-        hit = self.check_collision(x, y)
+        hit, distance = self.check_collision(x, y)
         if hit:
-            # next round
-            self.process_data()
             self.mark_targets()
-        
+
+            if self.first:
+                self.start = time.time()
+            else:
+                self.end = time.time()
+                mt = self.end - self.start
+                self.process_data(mt, distance)
+
+            self.error_counter = 0
+
+        else: 
+            self.error_counter += 1
+
         self.hit_counter += 1
         if self.hit_counter == REPETITIONS * 2:
             ex.next_round()
@@ -236,17 +220,21 @@ class Targets():
         distance = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
         return distance
 
-    def check_collision(self, x, y)-> bool:
+    def check_collision(self, x, y)-> tuple[bool, int]:
         """Check if the enemies collied with the hand or with the window border"""
         distance = self.measure_distance(self.marked.x, self.marked.y, x, y)
         if distance < self.current_radius:
-            return True
-        return False
+            return (True, distance)
+        return (False, distance)
 
-    def process_data(self):
-        pass
-        # print("todo")
-    
+    def process_data(self, mt, acc):
+        """Create a row of data to, that will later create a dataframe of the full round"""
+        trial = ex.current_trial
+        r = int(ex.r[trial])
+        d = int(ex.d[trial])
+        data = [int(ex.id), ex.current_trial, r, d, mt, self.error_counter, float(acc)]
+        self.data.append(data)
+# header = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy"]
 
 
 # ----- WINDOW INTERACTION ----- #
@@ -270,9 +258,6 @@ def on_mouse_press(x, y, button, modifiers):
         # only check collision, if trial is running
         ts.process_click(x, y)
 
-
-
-
 # ----- INIT ----- #
 
 config = Config(parse_cmd_input())
@@ -282,12 +267,7 @@ ts = Targets()
 # ----- RUN APP ----- #
 
 if __name__ == "__main__":
-    # preprocess
-    # config = Config(parse_cmd_input())
-    # ex.start_trial(0, 50)
     ex.start_experiment()
-
-
     pyglet.app.run()
 
 
