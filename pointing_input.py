@@ -1,10 +1,28 @@
 # source: https://github.com/google-ai-edge/mediapipe/blob/master/docs/solutions/hands.md
+# adjusted by Luca & Leonie
 
 import cv2
+import math
 import mediapipe as mp
+import pyautogui
+from pynput.mouse import Button, Controller
+
+
+VIDEO_ID = 1
+
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
+
+
+# Bildschirmauflösung ermitteln
+screen_width, screen_height = pyautogui.size()
+
+
+# Kameraauflösung festlegen (beispielsweise 1280x720 (720p HD Auflösung))
+camera_width, camera_height = 1280, 720
+
+
 
 # For static images:
 IMAGE_FILES = []
@@ -49,7 +67,9 @@ with mp_hands.Hands(
                 hand_world_landmarks, mp_hands.HAND_CONNECTIONS, azimuth=5)
 
 # For webcam input:
-cap = cv2.VideoCapture(1)
+mouse = Controller()
+cap = cv2.VideoCapture(VIDEO_ID)
+
 with mp_hands.Hands(
         model_complexity=0,
         min_detection_confidence=0.5,
@@ -69,27 +89,56 @@ with mp_hands.Hands(
         results = hands.process(image)
 
         # Draw the hand annotations on the image.
-        image.flags.writeable = True
+        image.flags.writeable = False
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         if results.multi_hand_landmarks:
             for hand_landmarks in results.multi_hand_landmarks:
-                print('hand_landmarks:', hand_landmarks)
+                """ print('hand_landmarks:', hand_landmarks)
                 print(
                     f'Index finger tip coordinates: (',
                     f'{hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].x * image_width}, '
-                    f'{hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y * image_height})')
+                    f'{hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y * image_height})') """
                 
+                # index finger position
                 index_tip_x = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].x * image_width
                 index_tip_y = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP].y * image_height
+            
+                # thumb position
+                thumb_tip_x = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].x * image_width
+                thumb_tip_y = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].y * image_height
+
                 
-                image = cv2.circle(image, (int(index_tip_x), int(index_tip_y)), 8, (255,0,0), 2)
+                # Mauskoordinaten berechnen
+                mouse_x = screen_width - (screen_width * index_tip_x / image_width)
+                mouse_y = screen_height * index_tip_y / image_height
+
+                # Maus bewegen
+                mouse.position = (mouse_x, mouse_y)
                 
-                mp_drawing.draw_landmarks(
+                # Calculate the distance between the centers of the two circles
+                distance = math.sqrt((index_tip_x - thumb_tip_x) ** 2 + (index_tip_y - thumb_tip_y) ** 2)
+
+                # Check if the distance is less than or equal to the sum of the radii
+                radius_index = 14
+                radius_thumb = 14
+
+                if distance <= (radius_index + radius_thumb):
+                    print("touched")
+                    mouse.press(Button.left)
+                else:
+                    print('release')
+                    mouse.release(Button.left)
+
+                
+                image = cv2.circle(image, (int(index_tip_x), int(index_tip_y)), radius_index, (255,0,0), 2)
+                image = cv2.circle(image, (int(thumb_tip_x), int(thumb_tip_y)), radius_thumb, (0,0,255), 2)
+                
+                """  mp_drawing.draw_landmarks(
                     image,
                     hand_landmarks,
                     mp_hands.HAND_CONNECTIONS,
                     mp_drawing_styles.get_default_hand_landmarks_style(),
-                    mp_drawing_styles.get_default_hand_connections_style())
+                    mp_drawing_styles.get_default_hand_connections_style()) """
                 
         # Flip the image horizontally for a selfie-view display.
         cv2.imshow('MediaPipe Hands', cv2.flip(image, 1))
