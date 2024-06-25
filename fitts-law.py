@@ -5,23 +5,6 @@ import pandas as pd
 import numpy as np
 import time
 
-"""
-- display fitt's law study setup 
-    - different conditions:
-        - 3+ target radii
-        - 3+ target distances
-- log data automatically
-- set important paramerters with cmd-line-parameters and config file
-    - participant id, num trials
-- Option to add latency to pointer
-
-- [ ] (2P) The Fitts’ Law application works
-- [ ] (2P) Data is logged correctly
-- [ ] (2P) Latency can be added
-- [ ] (1P) The application can be parametrized
-
-"""
-
 WIDTH = 500
 HEIGHT = 500
 window = pyglet.window.Window(WIDTH, HEIGHT, caption="Fitt's Law Test")
@@ -31,8 +14,11 @@ MARKED = (255, 0, 0)
 NUM_OF_CIRCLES = 7
 REPETITIONS = 3
 
+CURSOR_RADIUS = 5
+CURSOR_COLOR = (0, 0, 0)
+
 LOGS_FOLDER = "logs"
-HEADER = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy"]
+HEADER = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy", "latency"]
 
 # ----- Parameterization ----- #
 
@@ -45,8 +31,8 @@ def parse_cmd_input():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="A setup for a fitt's law study, that can be adjusted with parameters",
         epilog="""----- config.csv syntax -----\n
-        id,trials,radii,distances,lag\n
-        0,3,5 10 50,10 50 100,0
+        id,trials,radii,distances,latency\n
+        0,3,5 10 50,10 50 100,2
         """
     )
 
@@ -70,7 +56,6 @@ class Config:
         self.parse_file(df)
 
     def parse_file(self, df):
-        # set parameters
         print(df.head())
         self.participant_id = df.at[0, "id"]
         self.num_trials = df.at[0, "trials"]
@@ -78,7 +63,7 @@ class Config:
         self.target_radii = self.parse_field_to_list(rs)
         ds = df.at[0,"distances"]
         self.target_distances = self.parse_field_to_list(ds)
-        self.lag = df.at[0,"lag"]
+        self.lag = df.at[0,"latency"]
 
     def parse_field_to_list(self, field:str)-> list[str]:
         l = field.split(" ")
@@ -95,6 +80,8 @@ class Experiment():
         self.id = c.participant_id 
         self.num_trials = c.num_trials 
         self.current_trial = 0
+        self.lag = c.lag
+        self.df = pd.DataFrame(columns=HEADER)
 
     def start_experiment(self):
         self.start_trial(self.current_trial)
@@ -105,26 +92,25 @@ class Experiment():
         ts.mark_targets()
 
     def next_round(self):
-        print("data", ts.data)
+        self.current_trial += 1
+        print(self.current_trial)
+
         self.save_round()
 
         ts.clear_targets()
 
-        self.current_trial += 1
         if self.current_trial != self.num_trials:
             self.start_trial(self.current_trial)
         else:
             ts.clear_targets()
-            # l = pyglet.text.Label("done :D", x=ts.center[0], y=ts.center[1], batch=ts.batch)
-            # ts.targets.append(l)
-            # l.draw()
+            filename = f"{LOGS_FOLDER}/{self.id}.csv"
+            self.df.to_csv(filename, mode="w", encoding="utf-8")
             print("done :D")
 
     def save_round(self):
-        print("saveing the current round")
-        filename = f"{LOGS_FOLDER}/{self.id}-{self.current_trial}.csv"
-        df = pd.DataFrame(ts.data, columns=HEADER)
-        df.to_csv(filename, encoding="utf-8")
+        print("saving the current round")
+        df = pd.DataFrame(ts.data, columns=None)
+        self.df = self.df.concat(df)
 
 class Targets():
     """Draws and processes targets with different radii around the window center"""
@@ -221,21 +207,35 @@ class Targets():
         return distance
 
     def check_collision(self, x, y)-> tuple[bool, int]:
-        """Check if the enemies collied with the hand or with the window border"""
+        """Check if the cursor collides with the targets"""
         distance = self.measure_distance(self.marked.x, self.marked.y, x, y)
         if distance < self.current_radius:
             return (True, distance)
         return (False, distance)
 
     def process_data(self, mt, acc):
-        """Create a row of data to, that will later create a dataframe of the full round"""
+        """Create a row of data, that will later create a dataframe of the full round"""
         trial = ex.current_trial
         r = int(ex.r[trial])
         d = int(ex.d[trial])
-        data = [int(ex.id), ex.current_trial, r, d, mt, self.error_counter, float(acc)]
+        data = [int(ex.id), ex.current_trial, r, d, mt, self.error_counter, float(acc), int(ex.lag)]
         self.data.append(data)
 # header = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy"]
 
+
+class Cursor:
+    """A simulated cursor with added latency("lag")"""
+
+    def __init__(self) -> None:
+        self.batch = pyglet.graphics.Batch()
+        self.cursor = pyglet.shapes.Circle(0, 0, CURSOR_RADIUS, 
+                                           color=CURSOR_COLOR, batch=self.batch)
+        # icon = window.get_system_mouse_cursor(window.CURSOR_DEFAULT)
+        self.lag = ex.lag
+
+    def on_move(self, x, y, dx, dy):
+        self.cursor.x = x - dx * self.lag
+        self.cursor.y = y - dy * self.lag
 
 # ----- WINDOW INTERACTION ----- #
 
@@ -244,6 +244,7 @@ glClearColor(255, 255, 255, 1.0)
 def on_draw():
     window.clear()
     ts.batch.draw()
+    cursor.batch.draw()
 
 @window.event
 def on_key_press(symbol, modifiers):
@@ -255,31 +256,22 @@ def on_key_press(symbol, modifiers):
 @window.event
 def on_mouse_press(x, y, button, modifiers):
     if button == pyglet.window.mouse.LEFT:
-        # only check collision, if trial is running
         ts.process_click(x, y)
+
+@window.event
+def on_mouse_motion(x, y, dx, dy):
+    cursor.on_move(x, y, dx, dy)
 
 # ----- INIT ----- #
 
 config = Config(parse_cmd_input())
 ex = Experiment(config)
 ts = Targets()
+cursor = Cursor()
 
 # ----- RUN APP ----- #
 
 if __name__ == "__main__":
+    # window.set_mouse_visible(False) # !!
     ex.start_experiment()
     pyglet.app.run()
-
-
-"""
-@window.event
-def on_mouse_release(x, y, button, modifiers):
-    if button == pyglet.window.mouse.LEFT:
-        pass
-
-
-@window.event
-def on_mouse_drag(x, y, dx, dy, buttons, modifiers):
-    if buttons & pyglet.window.mouse.LEFT:
-        pass
-"""
