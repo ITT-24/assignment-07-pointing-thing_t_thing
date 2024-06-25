@@ -4,9 +4,10 @@ import argparse
 import pandas as pd
 import numpy as np
 import time
+import os
 
-WIDTH = 500
-HEIGHT = 500
+WIDTH = 700
+HEIGHT = 700
 window = pyglet.window.Window(WIDTH, HEIGHT, caption="Fitt's Law Test")
 
 COLOR = (207, 207, 207)
@@ -18,7 +19,7 @@ CURSOR_RADIUS = 5
 CURSOR_COLOR = (0, 0, 0)
 
 LOGS_FOLDER = "logs"
-HEADER = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy", "latency"]
+HEADER = ["id", "trial", "radius", "distance", "latency", "hit", "time", "accuracy", "click_x", "click_y", "target_x", "target_y"]
 
 # ----- Parameterization ----- #
 
@@ -30,9 +31,11 @@ def parse_cmd_input():
         prog="fitt's Law application",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="A setup for a fitt's law study, that can be adjusted with parameters",
-        epilog="""----- config.csv syntax -----\n
+        epilog="""----- config.csv format -----\n
         id,trials,radii,distances,latency\n
         0,3,5 10 50,10 50 100,2
+        -> radii & distances in px
+        -> latency in seconds
         """
     )
 
@@ -51,6 +54,8 @@ def parse_cmd_input():
     return config_file
 
 class Config:
+    """Parses the config file to a readable format"""
+
     def __init__(self,config_file) -> None:
         df = pd.read_csv(config_file)
         self.parse_file(df)
@@ -68,7 +73,6 @@ class Config:
     def parse_field_to_list(self, field:str)-> list[str]:
         l = field.split(" ")
         return l
-
 
 # ----- FITT'S LAW EXPERIMENT ----- #
 
@@ -101,16 +105,23 @@ class Experiment():
 
         if self.current_trial != self.num_trials:
             self.start_trial(self.current_trial)
-        else:
+        else: # end experiment
             ts.clear_targets()
+            if not os.path.isdir(LOGS_FOLDER):
+                os.makedirs(LOGS_FOLDER)
+                print("creating a new folder for the logs")
             filename = f"{LOGS_FOLDER}/{self.id}.csv"
             self.df.to_csv(filename, mode="w", encoding="utf-8")
             print("done :D")
+            window.close()
 
     def save_round(self):
         print("saving the current round")
         df = pd.DataFrame(ts.data, columns=HEADER)
-        self.df = pd.concat([self.df, df], ignore_index=True)
+        if self.df.empty:
+            self.df = df
+        else:
+            self.df = pd.concat([self.df, df], ignore_index=True)
 
 class Targets():
     """Draws and processes targets with different radii around the window center"""
@@ -127,6 +138,8 @@ class Targets():
         self.start = 0
         self.end = 0
         self.data = []
+        self.timestamp = 0
+
 
     def create_targets(self, radius, distance):
         # TODO: only create circles, that are within bounds
@@ -158,11 +171,11 @@ class Targets():
         if self.first:
             self.marked = self.targets[self.previous_index]
             self.first = False
-        else: # mark opposite
+        else: # mark target on the opposite side of the circle
             offset = int(np.ceil(len(self.targets) / 2))
             idx = self.previous_index + offset
             if idx >= len(self.targets):
-                # handle as if first
+                # handle as if self.first
                 self.previous_index = 0
                 idx = self.previous_index
             else:
@@ -170,9 +183,12 @@ class Targets():
                 self.first = True
             self.marked = self.targets[idx]
         self.marked.color = MARKED
+
+        # messure time until click
+        self.timestamp = time.time() 
     """ 
        0 1        0 2
-     6     2    5     4
+     6     2 -> 5     4
       5 4 3      3 1 6
     """
 
@@ -180,23 +196,14 @@ class Targets():
         if len(ts.targets) <= 1:
             return
         
+        t = time.time() - self.timestamp # end time
+
         hit, distance = self.check_collision(x, y)
-        if hit:
-            self.mark_targets()
-
-            if self.first:
-                self.start = time.time()
-            else:
-                self.end = time.time()
-                mt = self.end - self.start
-                self.process_data(mt, distance)
-
-            self.error_counter = 0
-
-        else: 
-            self.error_counter += 1
-
+        
         self.hit_counter += 1
+        self.process_data(t, hit, distance, x, y, self.marked.x, self.marked.y)
+        self.mark_targets()
+            
         if self.hit_counter == REPETITIONS * 2:
             ex.next_round()
             self.hit_counter = 0
@@ -213,27 +220,30 @@ class Targets():
             return (True, distance)
         return (False, distance)
 
-    def process_data(self, mt, acc):
-        """Create a row of data, that will later create a dataframe of the full round"""
+    def process_data(self, time, hit, acc, m_x, m_y, c_x, c_y):
+        """Create a row of data, that will later create a dataframe of the full experiment"""
         trial = ex.current_trial
         r = int(ex.r[trial])
         d = int(ex.d[trial])
-        data = [int(ex.id), ex.current_trial, r, d, mt, self.error_counter, float(acc), int(ex.lag)]
+        data = [int(ex.id), trial, r, d, int(ex.lag), 
+                hit, time, float(acc), m_x, m_y, c_x, c_y]
         self.data.append(data)
-# header = ["id", "trial", "radius", "distance", "mt", "errors", "accuracy"]
-
 
 class Cursor:
-    """A simulated cursor with added latency("lag")"""
+    """A simulated cursor with added latency("lag")
+       Latency = time delay between the cause and the effect
+    """
 
     def __init__(self) -> None:
         self.batch = pyglet.graphics.Batch()
         self.cursor = pyglet.shapes.Circle(0, 0, CURSOR_RADIUS, 
                                            color=CURSOR_COLOR, batch=self.batch)
-        # icon = window.get_system_mouse_cursor(window.CURSOR_DEFAULT)
         self.lag = ex.lag
 
+    # save movement + only do it after some time
     def on_move(self, x, y, dx, dy):
+        # time.sleep(0.2) # stutters applications
+        # movement should delay itself, by self.lag(sec)
         self.cursor.x = x - dx * self.lag
         self.cursor.y = y - dy * self.lag
 
@@ -272,6 +282,6 @@ cursor = Cursor()
 # ----- RUN APP ----- #
 
 if __name__ == "__main__":
-    # window.set_mouse_visible(False) # !!
+    # window.set_mouse_visible(False) # !! 
     ex.start_experiment()
     pyglet.app.run()
