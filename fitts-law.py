@@ -109,8 +109,8 @@ class Experiment():
 
     def save_round(self):
         print("saving the current round")
-        df = pd.DataFrame(ts.data, columns=None)
-        self.df = self.df.concat(df)
+        df = pd.DataFrame(ts.data, columns=HEADER)
+        self.df = pd.concat([self.df, df], ignore_index=True)
 
 class Targets():
     """Draws and processes targets with different radii around the window center"""
