@@ -1,10 +1,13 @@
-import pyglet
-from pyglet.gl import glClearColor
 import argparse
-import pandas as pd
 import numpy as np
-import time
 import os
+import pyglet
+import pandas as pd
+import threading
+import time
+
+from pyglet.gl import glClearColor
+from collections import deque
 
 WIDTH = 700
 HEIGHT = 700
@@ -23,11 +26,12 @@ HEADER = ["id", "trial", "radius", "distance", "latency", "hit", "time", "accura
 
 # ----- Parameterization ----- #
 
+
 def parse_cmd_input():
     """Read and parse the command line parameters"""
     config_file = None
 
-    parser = argparse.ArgumentParser( 
+    parser = argparse.ArgumentParser(
         prog="fitt's Law application",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="A setup for a fitt's law study, that can be adjusted with parameters",
@@ -40,10 +44,10 @@ def parse_cmd_input():
     )
 
     parser.add_argument('-c', '--config', type=str, metavar='',
-                    default="config.csv",
-                    required=False,
-                    action="store",
-                    help="""The path to the config file you want to use. 
+                        default="config.csv",
+                        required=False,
+                        action="store",
+                        help="""The path to the config file you want to use. 
                         Defaults to the included 'config.csv' in the current folder""")
 
     args = parser.parse_args()
@@ -53,10 +57,11 @@ def parse_cmd_input():
 
     return config_file
 
+
 class Config:
     """Parses the config file to a readable format"""
 
-    def __init__(self,config_file) -> None:
+    def __init__(self, config_file) -> None:
         df = pd.read_csv(config_file)
         self.parse_file(df)
 
@@ -64,13 +69,13 @@ class Config:
         print(df.head())
         self.participant_id = df.at[0, "id"]
         self.num_trials = df.at[0, "trials"]
-        rs = df.at[0,"radii"]
+        rs = df.at[0, "radii"]
         self.target_radii = self.parse_field_to_list(rs)
-        ds = df.at[0,"distances"]
+        ds = df.at[0, "distances"]
         self.target_distances = self.parse_field_to_list(ds)
-        self.lag = df.at[0,"latency"]
+        self.lag = df.at[0, "latency"]
 
-    def parse_field_to_list(self, field:str)-> list[str]:
+    def parse_field_to_list(self, field: str) -> list[str]:
         l = field.split(" ")
         return l
 
@@ -79,10 +84,10 @@ class Config:
 class Experiment():
     def __init__(self, config) -> None:
         c = config
-        self.d = c.target_distances # distance between targets 
+        self.d = c.target_distances  # distance between targets
         self.r = c.target_radii     # width/radius of the target
-        self.id = c.participant_id 
-        self.num_trials = c.num_trials 
+        self.id = c.participant_id
+        self.num_trials = c.num_trials
         self.current_trial = 0
         self.lag = c.lag
         self.df = pd.DataFrame(columns=HEADER)
@@ -105,7 +110,7 @@ class Experiment():
 
         if self.current_trial != self.num_trials:
             self.start_trial(self.current_trial)
-        else: # end experiment
+        else:  # end experiment
             ts.clear_targets()
             if not os.path.isdir(LOGS_FOLDER):
                 os.makedirs(LOGS_FOLDER)
@@ -123,8 +128,10 @@ class Experiment():
         else:
             self.df = pd.concat([self.df, df], ignore_index=True)
 
+
 class Targets():
     """Draws and processes targets with different radii around the window center"""
+
     def __init__(self):
         self.batch = pyglet.graphics.Batch()
         self.targets = []
@@ -140,10 +147,9 @@ class Targets():
         self.data = []
         self.timestamp = 0
 
-
     def create_targets(self, radius, distance):
         # TODO: only create circles, that are within bounds
-        self.data = [] # reset for every round  
+        self.data = []  # reset for every round
         self.current_radius = radius
         for i in range(0, NUM_OF_CIRCLES):
             self.add_circle(i, radius, distance)
@@ -159,19 +165,19 @@ class Targets():
     def clear_targets(self):
         self.targets = []
         self.marked = None
-    
+
     def mark_targets(self):
         """Mark targets to click with red. The next target is opposite of the previous"""
         for t in self.targets:
             t.color = COLOR
 
         if self.previous_index == len(self.targets):
-            self.previous_index = 0 # reset if end is reached
+            self.previous_index = 0  # reset if end is reached
 
         if self.first:
             self.marked = self.targets[self.previous_index]
             self.first = False
-        else: # mark target on the opposite side of the circle
+        else:  # mark target on the opposite side of the circle
             offset = int(np.ceil(len(self.targets) / 2))
             idx = self.previous_index + offset
             if idx >= len(self.targets):
@@ -179,13 +185,13 @@ class Targets():
                 self.previous_index = 0
                 idx = self.previous_index
             else:
-                self.previous_index += 1 
+                self.previous_index += 1
                 self.first = True
             self.marked = self.targets[idx]
         self.marked.color = MARKED
 
         # messure time until click
-        self.timestamp = time.time() 
+        self.timestamp = time.time()
     """ 
        0 1        0 2
      6     2 -> 5     4
@@ -195,15 +201,15 @@ class Targets():
     def process_click(self, x, y):
         if len(ts.targets) <= 1:
             return
-        
-        t = time.time() - self.timestamp # end time
+
+        t = time.time() - self.timestamp  # end time
 
         hit, distance = self.check_collision(x, y)
-        
+
         self.hit_counter += 1
         self.process_data(t, hit, distance, x, y, self.marked.x, self.marked.y)
         self.mark_targets()
-            
+
         if self.hit_counter == REPETITIONS * 2:
             ex.next_round()
             self.hit_counter = 0
@@ -213,7 +219,7 @@ class Targets():
         distance = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
         return distance
 
-    def check_collision(self, x, y)-> tuple[bool, int]:
+    def check_collision(self, x, y) -> tuple[bool, int]:
         """Check if the cursor collides with the targets"""
         distance = self.measure_distance(self.marked.x, self.marked.y, x, y)
         if distance < self.current_radius:
@@ -225,36 +231,115 @@ class Targets():
         trial = ex.current_trial
         r = int(ex.r[trial])
         d = int(ex.d[trial])
-        data = [int(ex.id), trial, r, d, int(ex.lag), 
+        data = [int(ex.id), trial, r, d, int(ex.lag),
                 hit, time, float(acc), m_x, m_y, c_x, c_y]
         self.data.append(data)
 
+
 class Cursor:
-    """A simulated cursor with added latency("lag")
-       Latency = time delay between the cause and the effect
+    """ A simulated cursor with added latency("lag")
+        Latency = time delay between the cause and the effect
     """
-
-    def __init__(self) -> None:
+    def __init__(self, latency):
         self.batch = pyglet.graphics.Batch()
-        self.cursor = pyglet.shapes.Circle(0, 0, CURSOR_RADIUS, 
-                                           color=CURSOR_COLOR, batch=self.batch)
-        self.lag = ex.lag
+        self.cursor = pyglet.shapes.Circle(0, 0, CURSOR_RADIUS, color=CURSOR_COLOR, batch=self.batch)
+        self.position_queue = deque()
+        self.lock = threading.Lock()
+        self.latency = latency
+        self.latency_enabled = False 
 
-    # save movement + only do it after some time
+        # Update cursor 60 times per second (necessary for latency)
+        pyglet.clock.schedule_interval(self.update_cursor, 1/60)
+
     def on_move(self, x, y, dx, dy):
-        # time.sleep(0.2) # stutters applications
-        # movement should delay itself, by self.lag(sec)
-        self.cursor.x = x - dx * self.lag
-        self.cursor.y = y - dy * self.lag
+        if start_screen.latency_enabled:
+            with self.lock:
+                self.position_queue.append((x, y, time.time()))
+        else:
+            self.cursor.x = x
+            self.cursor.y = y
+
+    def update_cursor(self, dt):
+        if start_screen.latency_enabled:
+            current_time = time.time()
+            with self.lock:
+                while self.position_queue and current_time - self.position_queue[0][2] >= self.latency:
+                    x, y, _ = self.position_queue.popleft()
+                    self.cursor.x = x
+                    self.cursor.y = y
+
+class StartScreen:
+    def __init__(self) -> None:
+        self.show = True
+        self.batch = pyglet.graphics.Batch()
+        
+        self.message = pyglet.text.Label(
+            "Click on the red circle to start!",
+            font_name='Times New Roman',
+            font_size=20,
+            bold=True,
+            x=WIDTH//2, y=HEIGHT//1.3,
+            anchor_x='center', anchor_y='center',
+            batch=self.batch
+        )
+        self.message.color = (0, 0, 0)
+        
+        self.start_circle = pyglet.shapes.Circle(
+            WIDTH//2, HEIGHT//2, 80,
+            color=(255, 0, 0), batch=self.batch
+        )
+        
+        self.latency_box = pyglet.shapes.Rectangle(
+            WIDTH//2 - 100, HEIGHT//5, 200, 60, 
+            color=(0, 0, 0), batch=self.batch
+        )
+        self.latency_label = pyglet.text.Label(
+            "Add Latency To Cursor",
+            font_name='Times New Roman',
+            font_size=12,
+            bold=True,
+            x=WIDTH//2, y=HEIGHT//5 + 30,
+            anchor_x='center', anchor_y='center',
+            batch=self.batch
+        )
+        self.latency_label.color = (255, 255, 255, 255)
+        self.latency_enabled = False
+
+    def draw(self):
+        self.batch.draw()
+
+    def check_click(self, x, y):
+        distance = np.sqrt((x - self.start_circle.x)**2 + (y - self.start_circle.y)**2)
+        # check if player started (clicked in circle)
+        if distance <= self.start_circle.radius:
+            self.show = False
+        # check if the latency box is clicked
+        if (self.latency_box.x <= x <= self.latency_box.x + self.latency_box.width) and \
+           (self.latency_box.y <= y <= self.latency_box.y + self.latency_box.height):
+            self.latency_enabled = not self.latency_enabled
+            if self.latency_enabled:
+                self.latency_box.color = (0, 150, 0) 
+            else:
+                self.latency_box.color = (0, 0, 0) 
+
 
 # ----- WINDOW INTERACTION ----- #
 
 glClearColor(255, 255, 255, 1.0)
+
 @window.event
 def on_draw():
     window.clear()
-    ts.batch.draw()
-    cursor.batch.draw()
+    if start_screen.show:
+        start_screen.draw()
+    else:
+        ts.batch.draw()
+        # hide the mouse if experiment is started with latency
+        window.set_mouse_visible(not start_screen.latency_enabled) 
+        # Draw cursor only if latency is enabled
+        if start_screen.latency_enabled:
+            cursor.batch.draw()
+
 
 @window.event
 def on_key_press(symbol, modifiers):
@@ -263,10 +348,14 @@ def on_key_press(symbol, modifiers):
     if symbol == pyglet.window.key.Q:
         window.close()
 
+
 @window.event
 def on_mouse_press(x, y, button, modifiers):
     if button == pyglet.window.mouse.LEFT:
-        ts.process_click(x, y)
+        if start_screen.show:
+            start_screen.check_click(x, y)
+        else:
+            ts.process_click(x, y)
 
 @window.event
 def on_mouse_motion(x, y, dx, dy):
@@ -277,11 +366,13 @@ def on_mouse_motion(x, y, dx, dy):
 config = Config(parse_cmd_input())
 ex = Experiment(config)
 ts = Targets()
-cursor = Cursor()
+start_screen = StartScreen()
+cursor = Cursor(config.lag)
 
 # ----- RUN APP ----- #
 
 if __name__ == "__main__":
-    # window.set_mouse_visible(False) # !! 
     ex.start_experiment()
+    # cursor updates for latency
+    pyglet.clock.schedule_interval(cursor.update_cursor, 1/60)
     pyglet.app.run()
