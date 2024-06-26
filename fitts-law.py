@@ -16,7 +16,7 @@ window = pyglet.window.Window(WIDTH, HEIGHT, caption="Fitt's Law Test")
 COLOR = (207, 207, 207)
 MARKED = (255, 0, 0)
 NUM_OF_CIRCLES = 7
-REPETITIONS = 3
+REPETITIONS = 3 # amount of clicks / 2 (gets doubled later on, so always even amount of clicks)
 
 CURSOR_RADIUS = 5
 CURSOR_COLOR = (0, 0, 0)
@@ -25,7 +25,6 @@ LOGS_FOLDER = "logs"
 HEADER = ["id", "trial", "radius", "distance", "latency", "hit", "time", "accuracy", "click_x", "click_y", "target_x", "target_y"]
 
 # ----- Parameterization ----- #
-
 
 def parse_cmd_input():
     """Read and parse the command line parameters"""
@@ -98,26 +97,31 @@ class Experiment():
         self.id = c.participant_id
         self.trials = c.trials
         self.current_trial = 0
+        self.condition = 0
         self.lag = c.lag
         self.df = pd.DataFrame(columns=HEADER)
         self.device = c.device
 
     def start_experiment(self):
-        self.start_trial(self.current_trial)
+        self.start_trial()
         pass
 
-    def start_trial(self, i):
+    def start_trial(self):
+        if self.condition == len(self.r):
+            self.condition = 0 # reset conditions
+        i = self.condition
         ts.create_targets(int(self.r[i]), int(self.d[i]))
         ts.mark_targets()
 
     def next_round(self):
         self.current_trial += 1
+        self.condition += 1
 
         self.save_round()
         ts.clear_targets()
 
         if self.current_trial != self.trials:
-            self.start_trial(self.current_trial)
+            self.start_trial()
         else: 
             ts.clear_targets()
             window.close()
@@ -240,7 +244,7 @@ class Targets():
         self.process_data(t, hit, distance, x, y, self.marked.x, self.marked.y)
         self.mark_targets()
 
-        if self.hit_counter == ex.trials * 2:
+        if self.hit_counter == REPETITIONS * 2:
             ex.next_round()
             self.hit_counter = 0
 
@@ -258,7 +262,7 @@ class Targets():
 
     def process_data(self, time, hit, acc, m_x, m_y, c_x, c_y):
         """Create a row of data, that will later create a dataframe of the full experiment"""
-        trial = ex.current_trial
+        trial = ex.condition
         r = int(ex.r[trial])
         d = int(ex.d[trial])
         data = [int(ex.id), trial, r, d, int(ex.lag),
