@@ -36,8 +36,8 @@ def parse_cmd_input():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="A setup for a fitt's law study, that can be adjusted with parameters",
         epilog="""----- config.csv format -----\n
-        id,trials,radii,distances,latency\n
-        0,3,5 10 50,10 50 100,2
+        id,repetitions,radii,distances,latency,device\n
+        0,3,25 15 40,110 30 70,0.15,mouse
         -> radii & distances in px
         -> latency in seconds
         """
@@ -64,20 +64,29 @@ class Config:
     def __init__(self, config_file) -> None:
         df = pd.read_csv(config_file)
         self.parse_file(df)
+        self.check_config()
 
     def parse_file(self, df):
         print(df.head())
         self.participant_id = df.at[0, "id"]
-        self.num_trials = df.at[0, "trials"]
+        self.trials = df.at[0, "repetitions"]
         rs = df.at[0, "radii"]
         self.target_radii = self.parse_field_to_list(rs)
         ds = df.at[0, "distances"]
         self.target_distances = self.parse_field_to_list(ds)
         self.lag = df.at[0, "latency"]
+        self.device = df.at[0, "device"]
 
     def parse_field_to_list(self, field: str) -> list[str]:
         l = field.split(" ")
         return l
+    
+    def check_config(self):
+        if len(self.target_distances) != len(self.target_radii):
+            print("[Not enough values]:")
+            print("radii and distances must have the same amount of values!")
+            window.close()
+            exit(-1)
 
 # ----- FITT'S LAW EXPERIMENT ----- #
 
@@ -87,10 +96,11 @@ class Experiment():
         self.d = c.target_distances  # distance between targets
         self.r = c.target_radii     # width/radius of the target
         self.id = c.participant_id
-        self.num_trials = c.num_trials
+        self.trials = c.trials
         self.current_trial = 0
         self.lag = c.lag
         self.df = pd.DataFrame(columns=HEADER)
+        self.device = c.device
 
     def start_experiment(self):
         self.start_trial(self.current_trial)
@@ -102,26 +112,46 @@ class Experiment():
 
     def next_round(self):
         self.current_trial += 1
-        print(self.current_trial)
 
         self.save_round()
-
         ts.clear_targets()
 
-        if self.current_trial != self.num_trials:
+        if self.current_trial != self.trials:
             self.start_trial(self.current_trial)
-        else:  # end experiment
+        else: 
             ts.clear_targets()
-            if not os.path.isdir(LOGS_FOLDER):
-                os.makedirs(LOGS_FOLDER)
-                print("creating a new folder for the logs")
-            filename = f"{LOGS_FOLDER}/{self.id}.csv"
-            self.df.to_csv(filename, mode="w", encoding="utf-8")
-            print("done :D")
             window.close()
+            self.end_experiment()
+
+    def end_experiment(self):
+        """Checks several failsaves before saving (or discarding) the collected data"""
+        if not os.path.isdir(LOGS_FOLDER):
+            os.makedirs(LOGS_FOLDER)
+            print("creating a new folder for the logs...")
+
+        filename = f"{LOGS_FOLDER}/{self.id}-{self.device}.csv"
+
+        if start_screen.latency_enabled and self.device != "latency": 
+            filename = f"{LOGS_FOLDER}/{self.id}-latency.csv"
+            self.device = "latency"
+
+        if os.path.isfile(filename): 
+            print(f"\nThere already exists a file for this exact experiment condition: {filename}")
+            print("Do you want to save your data separately?")
+            print("y --> will create a timestamped file.")
+            print("n --> will not save the file")
+            print("o --> override the current file")
+            save_order = input("y/n/o:")
+
+            if save_order == "y":
+                filename = f"{LOGS_FOLDER}/{self.id}-{self.device}-{time.time()}.csv"
+            elif save_order == "n":
+                return
+        
+        self.df.to_csv(filename, mode="w", encoding="utf-8")
+        print("done :D")
 
     def save_round(self):
-        print("saving the current round")
         df = pd.DataFrame(ts.data, columns=HEADER)
         if self.df.empty:
             self.df = df
@@ -210,7 +240,7 @@ class Targets():
         self.process_data(t, hit, distance, x, y, self.marked.x, self.marked.y)
         self.mark_targets()
 
-        if self.hit_counter == REPETITIONS * 2:
+        if self.hit_counter == ex.trials * 2:
             ex.next_round()
             self.hit_counter = 0
 

@@ -1,2 +1,2 @@
-id,trials,radii,distances,latency
-0,3,25 15 40,110 30 70,0.15
+id,repetitions,radii,distances,latency,device
+0,3,25 15 40,110 30 70,0.15,mouse
