@@ -124,8 +124,9 @@ class Experiment():
             self.start_trial()
         else: 
             ts.clear_targets()
-            window.close()
+            window.set_mouse_visible(True) 
             self.end_experiment()
+            window.close()
 
     def end_experiment(self):
         """Checks several failsaves before saving (or discarding) the collected data"""
@@ -265,7 +266,9 @@ class Targets():
         trial = ex.condition
         r = int(ex.r[trial])
         d = int(ex.d[trial])
-        data = [int(ex.id), trial, r, d, int(ex.lag),
+        if not start_screen.latency_enabled:
+            ex.lag = 0
+        data = [int(ex.id), trial, r, d, ex.lag,
                 hit, time, float(acc), m_x, m_y, c_x, c_y]
         self.data.append(data)
 

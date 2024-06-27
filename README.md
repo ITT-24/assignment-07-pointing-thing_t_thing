@@ -11,13 +11,13 @@ Using the `config.csv`, you can change any parameter. That file will be used by 
 - [x] nicht distance für 2 clicks  (in 03) dann
 - [x] time between appearance of new marked target and next click
 - [x] parameters set in config (id, radius, distance, trial, ...)
-- [x] latency hinzufügen
-- [x] start screen hinzufügen
+- [x] add latency 
+- [x] add start screen
+- [x] add latency to the logs!
 
 
 
 Fragen:
-- Das File überschreibt sich immer > sollte eher immer ein neues erstellen oder mit terminal appenden lassen
 - timestamp anstatt der direkt berechneten Zeit loggen ? Oder beides ?
 
 
