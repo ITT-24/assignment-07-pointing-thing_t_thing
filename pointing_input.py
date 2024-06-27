@@ -98,16 +98,16 @@ with mp_hands.Hands(
                 mouse.position = (mouse_x, mouse_y)
 
                 # uncomment if you want to perform a left click with pushing index and thumb together
-                """ 
+                
                 radius_thumb = 20
                 
-                # Calculate the distance between the centers of the two circles
-                distance = math.sqrt((index_tip_x - thumb_tip_x) ** 2 + (index_tip_y - thumb_tip_y) ** 2)
                 
                 # thumb position
                 thumb_tip_x = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].x * image_width
                 thumb_tip_y = hand_landmarks.landmark[mp_hands.HandLandmark.THUMB_TIP].y * image_height
                 
+                # Calculate the distance between the centers of the two circles
+                distance = math.sqrt((index_tip_x - thumb_tip_x) ** 2 + (index_tip_y - thumb_tip_y) ** 2)
                 
                 # Check if the distance is less than or equal to the sum of the radii
                 if distance <= (radius_index + radius_thumb):
@@ -116,7 +116,7 @@ with mp_hands.Hands(
                     mouse.release(Button.left)
                
                 image = cv2.circle(image, (int(thumb_tip_x), int(thumb_tip_y)), radius_thumb, (0, 0, 255), 2)
-                """
+               
 
                 image = cv2.circle(image, (int(index_tip_x), int(index_tip_y)), radius_index, (255, 0, 0), 2)
 

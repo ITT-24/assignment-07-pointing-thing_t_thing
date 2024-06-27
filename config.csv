@@ -1,2 +1,2 @@
 id,repetitions,radii,distances,latency,device
-0,3,25 15 40,110 30 70,0.15,mouse
+0,9,25 15 50,110 70 180,0.15,pose
