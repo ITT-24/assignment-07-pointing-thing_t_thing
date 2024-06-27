@@ -16,13 +16,13 @@ window = pyglet.window.Window(WIDTH, HEIGHT, caption="Fitt's Law Test")
 COLOR = (207, 207, 207)
 MARKED = (255, 0, 0)
 NUM_OF_CIRCLES = 7
-REPETITIONS = 3 # amount of clicks / 2 (gets doubled later on, so always even amount of clicks)
+REPETITIONS = 7 # amount of clicks / 2 (gets doubled later on, so always even amount of clicks)
 
 CURSOR_RADIUS = 5
 CURSOR_COLOR = (0, 0, 0)
 
 LOGS_FOLDER = "logs"
-HEADER = ["id", "trial", "radius", "distance", "latency", "hit", "time", "accuracy", "click_x", "click_y", "target_x", "target_y"]
+HEADER = ["id", "trial", "radius", "distance", "latency", "hit", "time", "accuracy", "click_x", "click_y", "target_x", "target_y", "click_time"]
 
 # ----- Parameterization ----- #
 
@@ -237,15 +237,16 @@ class Targets():
         if len(ts.targets) <= 1:
             return
 
-        t = time.time() - self.timestamp  # end time
+        click_time = self.timestamp
+        t = time.time() - click_time  # end time
 
         hit, distance = self.check_collision(x, y)
 
         self.hit_counter += 1
-        self.process_data(t, hit, distance, x, y, self.marked.x, self.marked.y)
+        self.process_data(t, hit, distance, x, y, self.marked.x, self.marked.y, click_time)
         self.mark_targets()
 
-        if self.hit_counter == REPETITIONS * 2:
+        if self.hit_counter == REPETITIONS:
             ex.next_round()
             self.hit_counter = 0
 
@@ -261,7 +262,7 @@ class Targets():
             return (True, distance)
         return (False, distance)
 
-    def process_data(self, time, hit, acc, m_x, m_y, c_x, c_y):
+    def process_data(self, time, hit, acc, m_x, m_y, c_x, c_y, click_time):
         """Create a row of data, that will later create a dataframe of the full experiment"""
         trial = ex.condition
         r = int(ex.r[trial])
@@ -269,7 +270,7 @@ class Targets():
         if not start_screen.latency_enabled:
             ex.lag = 0
         data = [int(ex.id), trial, r, d, ex.lag,
-                hit, time, float(acc), m_x, m_y, c_x, c_y]
+                hit, time, float(acc), m_x, m_y, c_x, c_y, click_time]
         self.data.append(data)
 
 
@@ -289,6 +290,7 @@ class Cursor:
         pyglet.clock.schedule_interval(self.update_cursor, 1/60)
 
     def on_move(self, x, y, dx, dy):
+        #  program captures all input, starts a thread per event, actually triggers input after delay
         if start_screen.latency_enabled:
             with self.lock:
                 self.position_queue.append((x, y, time.time()))
