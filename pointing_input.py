@@ -26,7 +26,7 @@ mp_hands = mp.solutions.hands
 
 click_stop = False
 
-radius_index = 10
+radius_index = 18
 padding_x = 100
 padding_y = 100
 
@@ -101,7 +101,7 @@ with mp_hands.Hands(
 
                 # uncomment if you want to perform a left click with pushing index and thumb together
                 
-                radius_thumb = 10
+                radius_thumb = 18
                 
                 
                 # thumb position
