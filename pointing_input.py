@@ -24,7 +24,9 @@ mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
 
-radius_index = 20
+click_stop = False
+
+radius_index = 10
 padding_x = 100
 padding_y = 100
 
@@ -99,7 +101,7 @@ with mp_hands.Hands(
 
                 # uncomment if you want to perform a left click with pushing index and thumb together
                 
-                radius_thumb = 20
+                radius_thumb = 10
                 
                 
                 # thumb position
@@ -109,11 +111,19 @@ with mp_hands.Hands(
                 # Calculate the distance between the centers of the two circles
                 distance = math.sqrt((index_tip_x - thumb_tip_x) ** 2 + (index_tip_y - thumb_tip_y) ** 2)
                 
-                # Check if the distance is less than or equal to the sum of the radii
-                if distance <= (radius_index + radius_thumb):
-                    mouse.press(Button.left)
-                else:
-                    mouse.release(Button.left)
+                # Check if the distance is less than or equal to the sum of the index radius + a fraction of the thumb radius
+                if distance <= (radius_index + (radius_thumb/4) ): 
+                    # a simple check to make sure the click only fires once
+                    if click_stop == False:
+                        click_stop = True
+                        mouse.press(Button.left)
+                        # print("click")
+                elif distance > radius_index + (radius_thumb/2) :
+                    # release the button has a little more leaneancy than click
+                    if click_stop == True:
+                        click_stop = False
+                        mouse.release(Button.left)  
+                        # print("release")
                
                 image = cv2.circle(image, (int(thumb_tip_x), int(thumb_tip_y)), radius_thumb, (0, 0, 255), 2)
                
