@@ -16,7 +16,7 @@ window = pyglet.window.Window(WIDTH, HEIGHT, caption="Fitt's Law Test")
 COLOR = (207, 207, 207)
 MARKED = (255, 0, 0)
 NUM_OF_CIRCLES = 7
-REPETITIONS = 7 # amount of clicks / 2 (gets doubled later on, so always even amount of clicks)
+REPETITIONS = 7 # number of clicks per round
 
 CURSOR_RADIUS = 5
 CURSOR_COLOR = (0, 0, 0)
