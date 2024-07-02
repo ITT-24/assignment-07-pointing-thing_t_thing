@@ -36,7 +36,7 @@ The default settings are:
 These parameters can also be customized when running the program. For example:
 
 ```
-python3 pointing_input.py 1 False 1200 720
+python3 pointing_input.py 1 False 1280 720
 ```
 
 ```
