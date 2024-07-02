@@ -185,18 +185,63 @@ Using the `config.csv`, you can change any parameter. That file will be used by 
 
 See `evaluation/fitts.ipynb` where we evaluated and interpretated our results.
 
-Here you can also find a Problem Section as wished.
+Here you can also find a Problem Section as wished
 
 
-## Probleme
-- Lag hat am anfang nicht funktioniert
-Am anfang hatten wir verzögerung ums doppelte und dann mit threading gelöst
+# Overall problems:
 
-- kamera boundary für task 1
-ende der kamera war nicht ende des bildschirms (Rand) -> haben padding eingebau und von klein auf groß umgerechnet 
+### Latency
+- first implementation used threaded delay
+  - save mouse coordinates
+  - wait the specified latency time 
+  - move to the next coordinates faster than normal
+  - basically delay than catch up
 
-- Falls ein Klick-Event ausgeführt werden sollte, wurden immer ganz viele ausgelöst
-Am Ende einen einfachen Check eingeführt, bei dem man erst "loslassen" muss, bevor ein neuer Event triggern kann
+- FIX:
+  - use threads to delay and save coordinates
+  - cursor "wait" until delay is over
+  - executes the mouse move event as they happend in real time
+
+### Camera boundary pose pointing
+- The camera frame is smaller than the screen resolution. Therefore, we converted the coordinates to fit the screen dimensions.
+-then we had issues with reaching the edge of the screen, as detection ended, when finger was outside of the camera frame
+
+- FIXES:
+  - we addad a boundary to the camera frame, so that the detection area is smaller than the camera frame. (like padding more or less)
+  - we used indirect coordinates to translate between the frame and the screen
+
+### Finger Size
+- pointing_input.py
+- left click was not recognized for Leonie but for me.
+- Her left clicks were recognized after she made the FINGER_RADIUS smaller. 
+- Therefore if we would want to make it better it would make sense to first track the finger, see how big these are and the adjust the FINGER_RADIUS accordingly
+- Since our time is limited we tested some variation and came to the conclusion that for her 10 and for me 18 was a good radius.
+  
+### Firing click events
+- fired mouse-click when fingers close enough together and mouse-release when they are far enough apart
+- click-event fired constantly when fingers close together
+- testing at that point was mostly done with pointing and dragging the camera window across the screen
+- FIX:
+  - add simple check
+  - every click needs a release before a new one can fire
+
+- This also led to a strong decline in the fps so fixing this was of great importance for a convenient usage
+
+### Frame drops
+- sometime the fps went to low
+- therefore we included a INTER_LINEAR interpolation if the frames per second drop below 20.
+
+### Logging
+- at the beggining not completely sure what data to log, so logged all data that we had access to
+  - better to have more + unchanged data, than not enough
+- Files would get overriden
+  - good for debug, as it doesn't clutter the computer
+  - bad for testing, if you forget to change the participants id or device in the `config.csv`
+  - FIX: add checks at end of experiment
+    - does log-folder exists (no: create)
+    - does file exists, if yes ask wether to override/create a new (timestamped) file or don't save
+
+
 
 
 
