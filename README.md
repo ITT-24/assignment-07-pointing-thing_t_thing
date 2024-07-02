@@ -81,7 +81,7 @@ Sometimes a left click will not be recognized if your fingers are smaller or big
 # 02 - Fitt's Law Experiment
 
 ## Overview
-In this project, we conducted a Fitts Law experiment where participants had to click on a red circle. These circles were arranged in a circular pattern, with a total of 7 circles. The purpose of this experiment was to gather data on the performance of different input devices under various conditions.
+In this project, we conducted a Fitts Law experiment where participants had to click on a red circle. These circles were arranged in a circular pattern, with a total of 7 circles. The purpose of this experiment was to gather data on the performance of different input devices under various conditions. For more details to the study design see `evaluation/fitts.ipynb`
 
 ## Usage
 ### 1. Change the Config File:
