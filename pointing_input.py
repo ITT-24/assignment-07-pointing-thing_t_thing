@@ -9,24 +9,32 @@ import time
 import pyautogui
 from pynput.mouse import Button, Controller
 
+# default setting -----
 VIDEO_ID = 0
-
-# set your camera resolution for mouse movement (for example 1280x720 (720p HD resolution))
+CLICK_IS_ACTIVE = False
+# set your camera resolution for mouse movement (for example 1280x720 (720p HD resolution)) (can also be done in the terminal)
 camera_width, camera_height = 1280, 720
+
+# if the left click is not recognized very good make the radius bigger if you have big fingers (most likely as a male 18 is the right radius) and if your fingers are smaller set the radius to a smaller number (most likely as a female 10 is the right radius)
+FINGER_RADIUS = 18
+#  --------------------
 
 if len(sys.argv) > 1:
     VIDEO_ID = int(sys.argv[1])
-elif len(sys.argv) > 3:
-    camera_width = int(sys.argv[2])
-    camera_height = int(sys.argv[3])
-
+if len(sys.argv) > 2:
+    print(sys.argv[2])
+    CLICK_IS_ACTIVE = str(sys.argv[2]) == 'True'
+if len(sys.argv) > 4:
+    camera_width = int(sys.argv[3])
+    camera_height = int(sys.argv[4])
+    
 mp_drawing = mp.solutions.drawing_utils
 mp_drawing_styles = mp.solutions.drawing_styles
 mp_hands = mp.solutions.hands
 
 click_stop = False
 
-radius_index = 18
+radius_index = FINGER_RADIUS
 padding_x = 100
 padding_y = 100
 
@@ -101,7 +109,7 @@ with mp_hands.Hands(
 
                 # uncomment if you want to perform a left click with pushing index and thumb together
                 
-                radius_thumb = 18
+                radius_thumb = FINGER_RADIUS
                 
                 
                 # thumb position
@@ -111,23 +119,23 @@ with mp_hands.Hands(
                 # Calculate the distance between the centers of the two circles
                 distance = math.sqrt((index_tip_x - thumb_tip_x) ** 2 + (index_tip_y - thumb_tip_y) ** 2)
                 
-                # Check if the distance is less than or equal to the sum of the index radius + a fraction of the thumb radius
-                if distance <= (radius_index + (radius_thumb/4) ): 
-                    # a simple check to make sure the click only fires once
-                    if click_stop == False:
-                        click_stop = True
-                        mouse.press(Button.left)
-                        # print("click")
-                elif distance > radius_index + (radius_thumb/2) :
-                    # release the button has a little more leaneancy than click
-                    if click_stop == True:
-                        click_stop = False
-                        mouse.release(Button.left)  
-                        # print("release")
+                # only controll left cllick of mouse if user whishes for it
+                if CLICK_IS_ACTIVE:
+                    # Check if the distance is less than or equal to the sum of the index radius + a fraction of the thumb radius
+                    if distance <= (radius_index + (radius_thumb/4) ): 
+                        # a simple check to make sure the click only fires once
+                        if click_stop == False:
+                            click_stop = True
+                            mouse.press(Button.left)
+                            # print("click")
+                    elif distance > radius_index + (radius_thumb/2) :
+                        # release the button has a little more leaneancy than click
+                        if click_stop == True:
+                            click_stop = False
+                            mouse.release(Button.left)  
+                            # print("release")
                
                 image = cv2.circle(image, (int(thumb_tip_x), int(thumb_tip_y)), radius_thumb, (0, 0, 255), 2)
-               
-
                 image = cv2.circle(image, (int(index_tip_x), int(index_tip_y)), radius_index, (255, 0, 0), 2)
 
         fps = calculate_fps()
